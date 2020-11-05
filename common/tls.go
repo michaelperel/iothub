@@ -1,11 +1,11 @@
 package common
 
 import (
-	"context"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -86,6 +86,7 @@ Johw1+qRzT65ysCQblrGXnRl11z+o+I=
 
 // RootCAs root CA certificates pool for connecting to the cloud.
 func RootCAs() *x509.CertPool {
+	log.Println("MYLOG: ROOTCA USED")
 	p := x509.NewCertPool()
 	if ok := p.AppendCertsFromPEM(caCerts); !ok {
 		panic("tls: unable to append certificates")
@@ -113,18 +114,12 @@ func TrustBundle(workloadURI string) (*x509.CertPool, error) {
 			return nil, err
 		}
 
-		httpc := http.Client{
-			Transport: &http.Transport{
-				DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-					return net.Dial("unix", addr.Name)
-				},
-			},
-		}
+		setSharedUnixHTTPClient(addr.Name)
 
 		var response *http.Response
 		//var err error
 
-		response, err = httpc.Get("http://iotedge" + "/trust-bundle?api-version=2019-11-05")
+		response, err = sharedUnixHTTPClient.Get("http://iotedge" + "/trust-bundle?api-version=2019-11-05")
 		if err != nil {
 			return nil, fmt.Errorf("tls: unable to append certificates: %s", err.Error())
 		}
@@ -133,6 +128,7 @@ func TrustBundle(workloadURI string) (*x509.CertPool, error) {
 		if err != nil {
 			return nil, fmt.Errorf("tls: unable to append certificates: %s", err.Error())
 		}
+		defer response.Body.Close()
 
 		err = json.Unmarshal(body, &tbr)
 		if err != nil {
